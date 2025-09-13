@@ -1,0 +1,8 @@
+
+
+const STATES ={
+    LOBBY: "LOBBY",
+    QUESTION: "QUESTION",
+    REVEAL: "REVEAL",
+    SCOREBOARD: "SCOREBOARD",
+}
