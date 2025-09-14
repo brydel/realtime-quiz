@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const {RoomManager} = require('./engine/RoomManager');
 
 const PORT = process.env.PORT || 4001;
 
@@ -30,28 +31,65 @@ const io = new Server(server, {
         credentials: true
     }
 });
+//-- branchement de la logique du jeu RoomManager
 
-// 6 ecoute des connexion en temp reel
+const rooms = new RoomManager(io);
 
 io.on("connection", (socket) => {
-    console.log(`Utilisateur connecté : ${socket.id}`);
-
-    //a message 
-    socket.emit("system:hello", {message: "Bienvenue sur le serveur Socket.io", socketId: socket.id});
+  console.log(`Utilisateur connecté : ${socket.id}`);
 
 
-    // b horloge ems chaque seconde
-
-   const intervalId = setInterval(() => {
+  // horloge, pour verifier le temps reel
+  const intervalId = setInterval(() => {
     socket.emit("demo:time", { now: new Date().toISOString() });
   }, 1000);
 
-  // c Nettoyage quand le client sedeconnecte
+  socket.on("room:join", ({ roomId, nickname }) => rooms.joinRoom(socket, { roomId, nickname }));
+  socket.on("room:leave", () => room.leaveRoom(socket));
+  socket.on("answer:submit", (payload) => rooms.submitAnswer(socket, payload));
+
+
+  // admin host: demarer question + reveal
+
+  socket.on("admin:nextQuestion", ({ roomId }) => rooms.startQuestion({ roomId }));
+  socket.on("admin:reveal", ({ roomId }) => rooms.reveal({ roomId }));
+
+
   socket.on("disconnect", () => {
     clearInterval(intervalId);
+    room.leaveRoom(socket);
     console.log("Client disconnected:", socket.id);
   });
+  
 });
+
+
+
+//--evenements de gestion des rooms
+
+
+
+// 6 ecoute des connexion en temp reel
+
+// io.on("connection", (socket) => {
+//     console.log(`Utilisateur connecté : ${socket.id}`);
+
+//     //a message 
+//     socket.emit("system:hello", {message: "Bienvenue sur le serveur Socket.io", socketId: socket.id});
+
+
+//     // b horloge ems chaque seconde
+
+//    const intervalId = setInterval(() => {
+//     socket.emit("demo:time", { now: new Date().toISOString() });
+//   }, 1000);
+
+//   // c Nettoyage quand le client sedeconnecte
+//   socket.on("disconnect", () => {
+//     clearInterval(intervalId);
+//     console.log("Client disconnected:", socket.id);
+//   });
+// });
 
 // 7 Lancement
 server.listen(PORT, () => console.log(`Listening on port ${PORT}`));
