@@ -11,15 +11,35 @@ const {
   AnswerSubmitSchema,
   AdminNextSchema,
   AdminRevealSchema,
+  RoomRulesSchema,
 } = require("./engine/schemas");
+const mongoose = require("mongoose");
+const cookieParser = require("cookie-parser");
 
 const PORT = process.env.PORT || 4001;
 
 // 1) App HTTP
 const app = express();
 
+
+// mongoose connection
+app.use(express.json());
+app.use(cookieParser());
+app.use("/auth", require("./authRoutes").router);
+app.use("/admin", require("./adminRoutes"));
+
+
+mongoose.connect(process.env.MONGO_URL || "mongodb://127.0.0.1:27017/realtime_quiz");
+
+mongoose.connection.on("connected", () => console.log("Mongo connected"));
+mongoose.connection.on("error", (err) => console.error("Mongo error:", err));
+
+
 // 2) CORS HTTP (front Vite par défaut)
 app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+
+app.use("/images", express.static("public/images"));
+
 
 // 3) Routes simples
 app.get("/health", (req, res) => res.status(200).json({ ok: true }));
@@ -97,6 +117,24 @@ io.on("connection", (socket) => {
       }
       rooms.startQuestion(data);
     });
+    socket.on("admin:rules", (payload) => {
+  // rate limit (tu peux réutiliser adminLimiter)
+  if (!adminLimiter.allow(socket.id)) {
+    socket.emit("system:notice", { type: "rate", message: "Actions admin trop fréquentes." });
+    return;
+  }
+  validatePayload(socket, "admin:rules", RoomRulesSchema, payload, (data) => {
+    // il faut la room courante (on utilise le roomId du socket)
+    const roomId = socket.data.roomId;
+    if (!rooms.isHost(socket, roomId)) {
+      socket.emit("system:notice", { type: "auth", message: "Seul le host peut changer les règles." });
+      return;
+    }
+    rooms.setRules({ roomId, rules: data });
+    socket.emit("system:notice", { type: "ok", message: "Règles mises à jour." });
+  });
+});
+
   });
 
   socket.on("admin:reveal", (payload) => {
